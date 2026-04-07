@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "sim2sim_E1",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "/home/saw/RL/humanoid_robot/Droid/Droid_real/test.py",
+            "console": "integratedTerminal",
+            "python": "/home/saw/miniconda3/envs/droidup_mujoco/bin/python",
+        }
+    ]
+}

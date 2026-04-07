@@ -1,0 +1,100 @@
+{
+  "scene": {
+    "robot": {
+      "actuators": {
+        "legs": {
+          "joint_names_expr": [
+            ".*_hip_pitch_joint",
+            ".*_hip_roll_joint",
+            ".*_hip_yaw_joint",
+            ".*_knee_joint",
+            ".*_ankle_pitch_joint",
+            ".*_ankle_roll_joint"
+          ],
+          "stiffness": {
+            ".*_hip_pitch_joint": 200.0,
+            ".*_hip_roll_joint": 100.0,
+            ".*_hip_yaw_joint": 100.0,
+            ".*_knee_joint": 200.0,
+            ".*_ankle_pitch_joint": 20.0,
+            ".*_ankle_roll_joint": 10.0
+          },
+          "damping": {
+            ".*_hip_pitch_joint": 5.0,
+            ".*_hip_roll_joint": 5.0,
+            ".*_hip_yaw_joint": 3.0,
+            ".*_knee_joint": 5.0,
+            ".*_ankle_pitch_joint": 2.0,
+            ".*_ankle_roll_joint": 1.0
+          },
+          "effort_limit_sim": {
+            ".*_hip_pitch_joint": 60.0,
+            ".*_hip_roll_joint": 36.0,
+            ".*_hip_yaw_joint": 36.0,
+            ".*_knee_joint": 60.0,
+            ".*_ankle_pitch_joint": 36.0,
+            ".*_ankle_roll_joint": 14.0
+          },
+          "velocity_limit_sim": {
+            ".*_hip_pitch_joint": 21.0,
+            ".*_hip_roll_joint": 21.0,
+            ".*_hip_yaw_joint": 21.0,
+            ".*_knee_joint": 21.0,
+            ".*_ankle_pitch_joint": 21.0,
+            ".*_ankle_roll_joint": 21.0
+          },
+          "armature": {
+            ".*_hip_pitch_joint": 0.01,
+            ".*_hip_roll_joint": 0.01,
+            ".*_hip_yaw_joint": 0.01,
+            ".*_knee_joint": 0.01,
+            ".*_ankle_pitch_joint": 0.01,
+            ".*_ankle_roll_joint": 0.01
+          },
+          "friction": 0.05
+        },
+        "waist": {
+          "joint_names_expr": [
+            ".*_waist_yaw_joint"
+          ],
+          "stiffness": {
+            ".*_waist_yaw_joint": 200.0
+          },
+          "damping": {
+            ".*_waist_yaw_joint": 5.0
+          },
+          "effort_limit_sim": {
+            ".*_waist_yaw_joint": 60.0
+          },
+          "velocity_limit_sim": {
+            ".*_waist_yaw_joint": 21.0
+          },
+          "armature": {
+            ".*_waist_yaw_joint": 0.01
+          },
+          "friction": 0.05
+        }
+      },
+      "init_state": {
+        "pos": [0.0, 0.0, 0.55],
+        "joint_pos": {
+          ".*_hip_pitch_joint": -0.3,
+          ".*_hip_roll_joint": 0.0,
+          ".*_hip_yaw_joint": 0.0,
+          ".*_knee_joint": 0.60,
+          ".*_ankle_pitch_joint": -0.3,
+          ".*_ankle_roll_joint": 0.0,
+          ".*_waist_yaw_joint": 0.0
+        }
+      }
+    }
+  },
+  "robot": {
+    "action_scale": 0.25,
+    "actor_obs_history_length": 10
+  },
+  "sim": {
+    "dt": 0.001,
+    "decimation": 10
+  }
+}

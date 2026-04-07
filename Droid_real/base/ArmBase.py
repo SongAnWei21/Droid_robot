@@ -1,0 +1,96 @@
+import math
+from Base import *
+from grpc import insecure_channel
+#from base.ConfigE1_DOG import Config
+from base.ConfigE1 import Config
+from droidup.api import droidup_msg_pb2 as msg_pb2
+from droidup.api import arm_service_pb2_grpc as arm_pb2_grpc
+
+class ArmBase:
+    def __init__(self):
+        print("Initializing ArmBase")
+        self.ArmEnvCfg = Config
+        self.armActions = self.ArmEnvCfg.num_arm_actions
+        self.armConfigs = msg_pb2.DroidConfigs()
+        self.armState = msg_pb2.DroidArmResponse()
+        self.armCommand = msg_pb2.DroidCommandRequest()
+        channel = insecure_channel(self.ArmEnvCfg.grpc_channel + ":50052")
+        print("Successfully connected to： ", self.ArmEnvCfg.grpc_channel + ":50052")
+        self.armStub = arm_pb2_grpc.ArmServiceStub(channel)
+        init_command(self.armCommand, self.armActions)
+        # 建立通信，获取机器人底层信息
+        self.get_arm_config()
+        self.get_arm_state()
+        set_joint_mode(self.armCommand, self.ArmEnvCfg, self.armActions)
+
+    def get_arm_config(self):
+        empty_request = msg_pb2.Empty()
+        self.armConfigs = self.armStub.GetArmConfig(empty_request)
+        print_configs(self.armConfigs)
+
+    def get_arm_state(self):
+        empty_request = msg_pb2.Empty()
+        self.armState = self.armStub.GetArmState(empty_request)
+        # print_state(self.armState, self.armConfigs)
+
+    def set_arm_command(self):
+        response = self.armStub.SetArmCommand(self.armCommand)
+        if not response:  # Assuming the RPC method returns a response
+            print("RPC failed")
+
+    def set_arm_path(self, T, qd):
+        s0, s1, st = 0.0, 0.0, 0.0
+        tt = 0.0
+        dt = 0.002
+        q0 = [0.0] * self.armActions
+        for idx in range(self.armActions):
+            q0[idx] = self.armState.position[idx]
+        timer = NanoSleep(2)  # 创建一个1毫秒的NanoSleep对象
+        while tt < T + dt / 2.0:
+            start_time = time.perf_counter()
+            self.get_arm_state()
+            st = min(tt / T, 1.0)
+            s0 = 0.5 * (1.0 + math.cos(math.pi * st))
+            s1 = 1 - s0
+
+            for idx in range(self.armActions):  # 假设关节数量是18
+                qt = s0 * q0[idx] + s1 * qd[idx]
+                self.armCommand.position[idx] = qt
+            self.set_arm_command()
+            tt += dt
+            timer.waiting(start_time)  # 等待下一个时间步长
+
+    def testArm(self):
+        T = 1  # 总时间
+        dt0 = np.zeros(self.armActions)
+        dt1 = np.zeros(self.armActions)
+        dt2 = np.zeros(self.armActions)
+        if self.armActions == 8:
+            dt0 = [round(math.radians(d), 4) for d in [ 0,  0,  0,   0,   0,  0, 0,   0]]
+            dt1 = [round(math.radians(d), 4) for d in [20,  0,  0, -20,  20,  0, 0, -20]]
+            dt2 = [round(math.radians(d), 4) for d in [30,  10, 0, 100, -30, 10, 0, 100]]
+        if self.armActions == 10:
+            dt0 = [round(math.radians(d), 4) for d in [-30, 10, 0,  80, -100, -30, 10, 0,  80, -100]]
+            dt1 = [round(math.radians(d), 4) for d in [-30, 10, 0, 100, -100,  30, 10, 0, 100, -100]]
+            dt2 = [round(math.radians(d), 4) for d in [30,  10, 0, 100, -100, -30, 10, 0, 100, -100]]
+        # 执行关节规划
+        for i in range(2):
+            print("wave round %d" % (i * 2 + 1))
+            # if self.ArmEnvCfg.hands_enable:
+            #     for idx in range(12):
+            #         self.armCommand.finger[idx] = 50
+            self.set_arm_path(T, dt1)
+            # print("wave round %d" % (i * 2 + 2))
+            # if self.ArmEnvCfg.hands_enable:
+            #     for idx in range(12):
+            #         self.armCommand.finger[idx] = 5
+            # self.set_arm_path(T, dt2)
+        print("return to zero")
+        gBot.set_arm_path(T, dt0)
+
+
+if __name__ == '__main__':
+    gBot = ArmBase()
+    gBot.testArm()
+
+

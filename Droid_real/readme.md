@@ -1,0 +1,153 @@
+# Deploy 使用说明
+更新策略
+```
+scp deploy/policies/* root@192.168.55.110:/home/x02lite/deploy/policies/
+```
+
+## 主机端配置(ubuntu22.04,python3.10)
+下载最新的: [rknn-toolkit2](https://github.com/rockchip-linux/rknn-toolkit2/releases)
+
+进入conda环境，例如：
+```
+conda activate legged_lab
+```
+安装rknn-toolkit2
+```
+pip install rknn_toolkit2-1.6.0+81f21f
+4d-cp310-cp310-linux_x86_64.whl -i https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+## 拷贝miniconda
+### 拷贝现有的minconda文件包
+```
+scp droid_miniconda3.tar.gz root@192.168.55.110/root/
+```
+### 登录到机器人终端，解压文件包
+```
+ssh root@192.168.55.110
+tar -xzvf droid_miniconda3.tar.gz
+rm -fr droid_miniconda3.tar.gz
+```
+### 写入环境变量
+```
+cat << 'EOF' >> ~/.bashrc
+
+# >>> conda initialize >>>
+# !! Contents within this block are managed by 'conda init' !!
+__conda_setup="$('/root/miniconda3/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
+if [ $? -eq 0 ]; then
+    eval "$__conda_setup"
+else
+    if [ -f "/root/miniconda3/etc/profile.d/conda.sh" ]; then
+        . "/root/miniconda3/etc/profile.d/conda.sh"
+    else
+        export PATH="/root/miniconda3/bin:$PATH"
+    fi
+fi
+EOF
+```
+### 设置默认不启动base
+```
+source ~/.bashrc
+conda config --set auto_activate_base false
+```
+
+## 安装miniconda
+### 登录到机器人终端，配置文件权限
+```
+ssh x02lite@192.168.55.110
+```
+静态IP下R6S需要链接外网：
+```
+vi /etc/resolv.conf
+添加下面的内容：
+nameserver 8.8.8.8
+nameserver 8.8.4.4
+```
+下载并安装miniconda
+```
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-aarch64.sh
+sudo chmod +x Miniconda3-latest-Linux-aarch64.sh
+./Miniconda3-latest-Linux-aarch64.sh
+```
+禁止自动加载base环境
+```
+conda config --set auto_activate_base false
+```
+创建新的conda环境
+```
+conda create -n droid python=3.10 numpy
+conda activate droid
+```
+安装必要的软件包
+```
+pip install -i https://pypi.tuna.tsinghua.edu.cn/simple torch tqdm onnxruntime protobuf==5.28.0 grpcio==1.65.4 grpcio-tools==1.65.4
+```
+
+## 远端部署自动化启动服务
+### 上传"deploy"文件夹到远端目录
+上传前记得将deploy->base->LegBase/ArmBase/RobotBase中的GRPC通道修改为：
+grpc_channel = '192.168.254.100'
+```
+scp -r deploy/ x02lite@192.168.55.110:/home/x02lite/
+```
+### 登录到机器人终端，配置文件权限
+```
+ssh x02lite@192.168.55.110
+```
+#### 修改deploy_rl.sh权限
+```
+sudo chmod +x /home/x02lite/deploy/script/deploy_rl.sh
+```
+#### 拷贝deploy_rl.service到指定目录
+```
+sudo cp /home/x02lite/deploy/script/deploy_rl.service /etc/systemd/system/
+```
+#### 修改deploy_rl.service权限
+```
+sudo chmod 777 /etc/systemd/system/deploy_rl.service
+```
+### 配置自启动服务
+重新加载systemd配置
+```
+sudo systemctl daemon-reload
+```
+启动deploy_rl服务
+```
+sudo systemctl start deploy_rl
+```
+设置deploy_rl服务自启动
+```
+sudo systemctl enable deploy_rl
+```
+停止deploy_rl服务自启动
+```
+sudo systemctl disable deploy_rl
+```
+查看deploy_rl服务状态
+```
+sudo systemctl status deploy_rl
+```
+正常输出下面的状态时，表示服务启动成功
+```
+● deploy_rl.service - Deploy RL Controller Description
+     Loaded: loaded (/etc/systemd/system/deploy_rl.service; disabled; preset: enabled)
+     Active: active (running) since Fri 2024-01-26 21:49:08 UTC; 2s ago
+   Main PID: 1432 (deploy_rl.sh)
+      Tasks: 2 (limit: 9474)
+     Memory: 14.3M
+        CPU: 2.354s
+     CGroup: /system.slice/deploy_rl.service
+             ├─1432 /bin/bash /home/x02lite/deploy/script/deploy_rl.sh
+             └─1442 python sim2real.py
+```
+
+## AOA跟随系统配置
+拷贝规则文件到机器人端
+```
+scp deploy/script/99-ttyACM0.rules root@192.168.55.110:/etc/udev/rules.d/
+```
+或者登录到机器人终端直接配置用户组权限
+```
+sudo usermod -a -G dialout $USER
+```
