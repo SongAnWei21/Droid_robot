@@ -83,7 +83,6 @@ def get_robot_state_arrays(robot):
     base_euler = np.array(robot.legState.imu_euler)
     base_euler[base_euler > math.pi] -= 2 * math.pi
     
-    # 【真机护盾 1：IMU 硬件误差补偿】
     # 如果真机起步后往后倒，可以尝试改成 0.05 左右；现在默认设为 0。
     PITCH_OFFSET = 0.0  
     base_euler[1] += PITCH_OFFSET  
@@ -111,14 +110,14 @@ def run_real(policy_path, motion_file):
     timestep = 0  # 绝对不跳帧，从 0 开始
     alpha = 1.0  # 低通滤波范围 0.0 ~ 1.0，越小动作越丝滑，但会有微小的延迟；越大动作越干脆。
 
-    # ── 1. 载入动作数据 (NPZ) ──
+    # ── 载入动作数据 (NPZ) ──
     print(f"[INFO]: Loading motion file from {motion_file}")
     motion = np.load(motion_file)
     motioninputpos = motion["joint_pos"]
     motioninputvel = motion["joint_vel"]
     num_frames = min(motioninputpos.shape[0], motioninputvel.shape[0])
 
-    # ── 2. 载入 ONNX 及 Metadata 解析 ──
+    # ── 载入 ONNX 及 Metadata 解析 ──
     print(f"[INFO]: Parsing ONNX metadata from {policy_path}")
     model = onnx.load(policy_path)
     
@@ -148,7 +147,7 @@ def run_real(policy_path, motion_file):
     policy = ort.InferenceSession(policy_path)
     has_time_step = 'time_step' in [inp.name for inp in policy.get_inputs()]
 
-    # ── 3. 初始化真机 SDK ──
+    # ── 初始化真机 SDK ──
     print("[INFO]: Initializing Real Robot SDK...")
     robot = RobotBase(Config)
     robot.legActions = 13
@@ -163,7 +162,7 @@ def run_real(policy_path, motion_file):
         robot.armCommand.kp.append(0.0)
         robot.armCommand.kd.append(0.0)
 
-    # ── 4. 平滑初始化到第 0 帧 ──
+    # ── 平滑初始化到第 0 帧 ──
     print("[INFO] Smoothly initializing to the 0-th frame...")
     robot.get_robot_state()
     q0_leg = [robot.legState.position[i] for i in range(13)]
@@ -196,7 +195,7 @@ def run_real(policy_path, motion_file):
         tt_init += 0.002
         timer_init.waiting(start_time)
 
-    # ── 5. 倒计时准备 ──
+    # ── 倒计时准备 ──
     # wait_seconds = 1.0
     # print(f"\n[SUCCESS] 就位完成！倒计时 {int(wait_seconds)} 秒后 AI 接管控制权...")
     # wait_time = 0.0
@@ -220,7 +219,7 @@ def run_real(policy_path, motion_file):
     #     wait_time += 0.005
     #     timer_wait.waiting(start_time)
 
-    # ==================== 真机护盾 2：获取真实下垂姿态并“欺骗”AI ====================
+
     # 机器人落地后，电机在重力压迫下会存在一点点下垂误差（Gravity Sag）
     robot.get_robot_state()
     settled_q_real = np.zeros(21, dtype=np.float32)
@@ -235,7 +234,7 @@ def run_real(policy_path, motion_file):
     action_buffer = action_buffer.astype(np.float32)
     # ===============================================================================
 
-    # ── 6. 初始化 10 帧历史堆叠 (1110维) ──
+    # ── 初始化 10 帧历史堆叠 (1110维) ──
     H = 10
     hist_cmd       = np.zeros((H, 42), dtype=np.float32)
     hist_proj_grav = np.zeros((H, 3),  dtype=np.float32)
@@ -245,7 +244,7 @@ def run_real(policy_path, motion_file):
     hist_actions   = np.zeros((H, 21), dtype=np.float32)
     is_first_frame = True
 
-    # ── 7. 核心循环 ──
+    # ── 核心循环 ──
     print("\n[INFO] AI 动作跟随已启动！(按 Ctrl+C 随时急停)")
     # 注意：目标姿态从真实的物理下垂姿态开始起步
     target_q_real = settled_q_real.copy() 
@@ -325,8 +324,8 @@ def run_real(policy_path, motion_file):
                 target_pos_onnx = action_onnx * action_scale_onnx + default_pos_onnx
                 raw_target_q_real = target_pos_onnx[idx_to_real]
 
-                # 【真机护盾 3：AI 软启动离合 (Fade-in)】
-                # 在 AI 接管的前 100 个控制帧（2 秒）内，让目标关节从当前被压弯的僵直态缓慢向 AI 目标态靠近
+
+                # 在机器人接管的前 100 个控制帧（2 秒）内，让目标关节从当前被压弯的僵直态缓慢向目标态靠近
                 FADE_IN_STEPS = 100.0
                 current_ctrl_step = count_lowlevel // decimation
                 if current_ctrl_step < FADE_IN_STEPS:
@@ -335,8 +334,8 @@ def run_real(policy_path, motion_file):
                 else:
                     target_q_real = raw_target_q_real
 
-                # 【真机护盾 4：NaN 紧急熔断】
-                # 一旦出现 NaN 必须立刻掐断指令下发，保护电机！
+
+                # 一旦出现 NaN 必须立刻掐断指令下发，保护电机
                 if np.any(np.isnan(target_q_real)):
                     print("\n[CRITICAL ERROR] 传感器或网络输出 NaN！已紧急熔断，保护真机安全。")
                     break
@@ -373,7 +372,7 @@ def run_real(policy_path, motion_file):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--policy_path", type=str, default="/home/saw/droidup/E1_BeyondMimic/logs/rsl_rl/e1_flat/2026-03-19_19-39-25/exported/model_49999.onnx")
+    parser.add_argument("--policy_path", type=str, default="/home/saw/droidup/Droid_robot/Droid_real/policy/beyondmimic/his_1110/model_49999.onnx")
     parser.add_argument("--motion_file", type=str, default="motion/MJ_dance.npz")
     args = parser.parse_args()
 
