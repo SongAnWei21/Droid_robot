@@ -43,7 +43,9 @@ class GamepadController:
         # 严格按照你的硬件图谱映射！
         lx = self.axes.get(0, 0.0)  # 左摇杆 左右 (Axis 0)
         ly = self.axes.get(1, 0.0)  # 左摇杆 上下 (Axis 1)
-        rx = self.axes.get(2, 0.0)  # 右摇杆 左右 (Axis 2) 👈 真正控制转向的轴！
+        
+        # 🔴 核心修复：将转向轴修改为你测出来的 Axis 3
+        rx = self.axes.get(3, 0.0)  
 
         lx = 0.0 if abs(lx) < self.deadzone else lx
         ly = 0.0 if abs(ly) < self.deadzone else ly
@@ -52,7 +54,6 @@ class GamepadController:
         # 前方为正，左侧为正，逆时针转为正
         cmd_x = -ly * 1.0  
         cmd_y = -lx * 0.5  
-        # 如果发现左推变成了右转，就把下面这行的负号去掉！
         cmd_yaw = -rx * 1.0 
 
         return cmd_x, cmd_y, cmd_yaw
@@ -68,23 +69,39 @@ class GamepadController:
     def get_button_rb(self): return self.buttons.get(7, False)
     
     # 因为你的LT/RT是模拟按键，所以直接读 button 而不是 axis
-    def get_button_lt(self): return self.buttons.get(8, False) 
-    def get_button_rt(self): return self.buttons.get(9, False)
-    
-    def get_button_back(self): return self.buttons.get(10, False)
-    def get_button_start(self): return self.buttons.get(11, False)
+    def get_button_lt(self): 
+        # 兼容模式：不管是真实的 Button 8，还是 Axis 2/4 被按下一半以上，都算触发！
+        axis_lt = self.axes.get(2, -1.0) > 0.5 or self.axes.get(4, -1.0) > 0.5
+        return self.buttons.get(8, False) or axis_lt
+
+    def get_button_rt(self): 
+        axis_rt = self.axes.get(5, -1.0) > 0.5
+        return self.buttons.get(9, False) or axis_rt
 
 # ==========================================
-# 硬件侦测工具
+# 硬件侦测工具 (已增强摇杆轴 Axis 侦测)
 # ==========================================
 if __name__ == "__main__":
     print("--- 🎮 手柄硬件雷达 ---")
-    pad = GamepadController(deadzone=0.1)
+    print("请分别推动左摇杆和右摇杆，观察屏幕上 '摇杆轴' 的变化！")
+    print("按 Ctrl+C 退出测试\n")
+    
+    # 这里把 deadzone 设为 0，为了看清楚最原始的微小数据
+    pad = GamepadController(deadzone=0.0) 
     try:
         while True:
             pad.update()
-            pressed = [k for k, v in pad.buttons.items() if v]
-            print(f"\r[雷达] 当前按下的按键 ID: {pressed}                          ", end="")
+            
+            # 获取当前被按下的按钮 ID
+            pressed_btns = [k for k, v in pad.buttons.items() if v]
+            
+            # 获取所有摇杆轴的值 (过滤掉轻微的零点漂移漂移，保留绝对值 > 0.05 的)
+            active_axes = {k: round(v, 2) for k, v in pad.axes.items() if abs(v) > 0.05}
+            
+            # 清除并同行打印
+            print(f"\r[雷达] 按键(Btn): {pressed_btns} | 摇杆轴(Axis): {active_axes}                        ", end="")
             time.sleep(0.05)
+            
     except KeyboardInterrupt:
+        print("\n\n[INFO] 测试结束，退出雷达。")
         pygame.quit()
